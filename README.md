@@ -4,68 +4,29 @@
 
 ### Connect to ByteHouse
 
-#### 1. Connect with Username and Password.
+#### Connect with API Key (recommend)
 
-To connect to the ByteHouse, you need to specify the ByteHouse gateway URL with your account and user information. You
-can visit [ByteHouse China](bytehouse.cn) (for China-mainland) or [Bytehouse Global](bytehouse.cloud) (for
-non-China-mainland) to register account.
+- For ByteHouse Global/China version, users can create and download credentials from [console](https://console.bytehouse.cloud/account/details)
+- For ByteHouse Volcano Cloud Version, users need to create and download credentials from Volcano Cloud's [Account Detailed page](https://console.volcengine.com/bytehouse/region:bytehouse+cn-beijing/account/details)
 
-The below login parameters is the same as if you were to login using the web console:
-- Account Name 
-- Region
-- User Name
-- Password
+Create the API Key and save it in the local environment.
+![image](https://github.com/tinafangkunding/driver-go/assets/26135229/7628836a-31f7-4b87-8dd0-a921c025c6a1)
 
+Here's an example for Go Driver Connection
 ```go
+db, err := sql.Open("bytehouse", "tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}")
 
-db, err := sql.Open("bytehouse", "tcp://?region=<region>&account=<account>&user=<user>&password=<password>")
+//If user wishes to specify the database in url
+db, err := sql.Open("bytehouse", "tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}&database={DATABASE}")
+
 if err != nil {
     fmt.Printf("error = %v", err)
     return
 }
 defer db.Close()
-
 ```
-#### 2. Connect with Access Key ID/ Secret Access Key (AK/SK)
 
-- For ByteHouse Global/China version, users can create and download credentials from [console](https://console.bytehouse.cloud/account/details)
-- For ByteHouse Volcano Cloud Version, users need to create and download credentials from Volcano Cloud's [Key Management page](https://console.volcengine.com/iam/keymanage/)
-
-```go
-package main
-
-import (
-	"context"
-	"fmt"
-
-	"github.com/bytehouse-cloud/driver-go/sdk"
-)
-
-func main() {
-    dsn := fmt.Sprintf("tcp://?region=cn-beijing&volcano=true&access_key=%v&secret_key=%v",
-        "<your ak>",
-        "<your sk>",
-    )
-
-    g, err := sdk.Open(context.Background(), dsn)
-    if err != nil{
-        panic(err)
-    }
-
-    if err := g.Ping(); err != nil {
-        panic(err)
-    }
-
-    res, err := g.Query("select 1, 2, 3")
-    for {
-        row, ok := res.NextRow()
-        if !ok {
-            break
-        }
-        fmt.Println(row)
-    }
-}
-```
+Replace the Host:Portand API key placeholders in the dsn below as specified in the [ByteHouse doc](https://docs.bytehouse.cloud/en/bytehouse/docs/supported-regions-and-providers).
 
 ### DDL
 
@@ -73,36 +34,50 @@ All DDL queries should be done with db.ExecContext
 
 ```go
 package main
-
 import (
-	"context"
-	"database/sql"
-	"fmt"
+    "context"
+    "fmt"
+    "github.com/bytehouse-cloud/driver-go/sdk"
 )
-
 func main() {
-	db, err := sql.Open("bytehouse", "tcp://?region=<region>&account=<account>&user=<user>&password=<password>")
+    dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}")
+//If user wishes to specify the database in url
+    dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}&database={DATABASE}")
 
-	if err != nil {
-		fmt.Printf("error = %v", err)
-		return
-	}
-	defer db.Close()
+    ctx := context.Background()
 
-	ctx := context.Background()
+    g, err := sdk.Open(ctx, dsn)
+    if err != nil {
+       panic(err)
+    }
 
-	// Note first return value is sql.Result, which can be discarded since it is not implemented in the driver
-	if _, err = db.ExecContext(ctx,
-		`CREATE TABLE sample_table 
-				(
-					dog UInt8,
-					cat UInt8
-				)
-				ENGINE=MergeTree ORDER BY dog`,
-	); err != nil {
-		fmt.Printf("error = %v", err)
-		return
-	}
+    if err := g.Ping(); err != nil {
+       panic(err)
+    }
+
+    if qs, err := g.QueryContext(ctx, "CREATE DATABASE my_db"); err != nil || qs.Exception() != nil {
+       if err != nil {
+          panic(err)
+       }
+       if qs.Exception() != nil {
+          panic(qs.Exception())
+       }
+    }
+
+    if qs, err := g.QueryContext(ctx,
+       `CREATE TABLE my_db.animal 
+                (
+                    dog Int64,
+                    cat Int64
+                )
+                ENGINE=CnchMergeTree ORDER BY dog`); err != nil || qs.Exception() != nil {
+       if err != nil {
+          panic(err)
+       }
+       if qs.Exception() != nil {
+          panic(qs.Exception())
+       }
+    }
 }
 ```
 
@@ -117,28 +92,31 @@ You can specify the columns to be inserted, if no column is specified, all colum
 
 ```go
 package main
-
 import (
-	"context"
-	"database/sql"
-	"fmt"
-
-	_ "github.com/bytehouse-cloud/driver-go/sql"
+    "context"
+    "fmt"
+    "github.com/bytehouse-cloud/driver-go/sdk"
 )
-
 func main() {
-	db, err := sql.Open("bytehouse", "tcp://?region=<region>&account=<account>&user=<user>&password=<password>")
-	if err != nil {
-		fmt.Printf("error = %v", err)
-		return
-	}
-	defer db.Close()
+    dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}")
+//If user wishes to specify the database in url
+    dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}&database={DATABASE}")
 
-	ctx := context.Background()
-	// Note first return value is sql.Result, which can be discarded since it is not implemented in the driver
-	if _, err := db.ExecContext(ctx, "INSERT INTO sample_table (col1, col2) VALUES", 1, 2); err != nil {
-		fmt.Printf("error = %v", err)
-	}
+    ctx := context.Background()
+
+    g, err := sdk.Open(ctx, dsn)
+    if err != nil {
+       panic(err)
+    }
+
+    if err := g.Ping(); err != nil {
+       panic(err)
+    }
+
+    if err := g.SendInsertQuery(ctx, "INSERT INTO my_db.animal VALUES (1,2), (3,4)"); err != nil {
+       panic(err)
+    }
+
 }
 ```
 
@@ -158,12 +136,9 @@ import (
 )
 
 func main() {
-	db, err := sql.Open("bytehouse", "tcp://?region=<region>&account=<account>&user=<user>&password=<password>")
-	if err != nil {
-		fmt.Printf("error = %v", err)
-		return
-	}
-	defer db.Close()
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}")
+	//If user wishes to specify the database in url
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}&database={DATABASE}")
 
 	// set the insert block size if needed
 	ctx := bytehouse.NewQueryContext(context.Background())
@@ -208,12 +183,9 @@ import (
 )
 
 func main() {
-	db, err := sql.Open("bytehouse", "tcp://?region=<region>&account=<account>&user=<user>&password=<password>")
-	if err != nil {
-		fmt.Printf("error = %v", err)
-		return
-	}
-	defer db.Close()
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}")
+	//If user wishes to specify the database in url
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}&database={DATABASE}")
 
 	ctx := context.Background()
 	// Note first return value is sql.Result, which can be discarded since it is not implemented in the driver
@@ -244,12 +216,9 @@ import (
 )
 
 func main() {
-	db, err := sql.Open("bytehouse", "tcp://?region=<region>&account=<account>&user=<user>&password=<password>")
-	if err != nil {
-		fmt.Printf("error = %v", err)
-		return
-	}
-	defer db.Close()
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}")
+	//If user wishes to specify the database in url
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}&database={DATABASE}")
 
 	ctx := context.Background()
 
@@ -296,12 +265,9 @@ import (
 )
 
 func main() {
-	db, err := sql.Open("bytehouse", "tcp://?region=<region>&account=<account>&user=<user>&password=<password>")
-	if err != nil {
-		fmt.Printf("error = %v", err)
-		return
-	}
-	defer db.Close()
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}")
+	//If user wishes to specify the database in url
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}&database={DATABASE}")
 
 	ctx := context.Background()
 
@@ -343,12 +309,9 @@ import (
 )
 
 func main() {
-	db, err := sql.Open("bytehouse", "tcp://?region=<region>&account=<account>&user=<user>&password=<password>")
-	if err != nil {
-		fmt.Printf("error = %v", err)
-		return
-	}
-	defer db.Close()
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}")
+	//If user wishes to specify the database in url
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}&database={DATABASE}")
 
 	ctx := context.Background()
 
@@ -394,12 +357,9 @@ import (
 )
 
 func main() {
-	db, err := sql.Open("bytehouse", "tcp://?region=<region>&account=<account>&user=<user>&password=<password>")
-	if err != nil {
-		fmt.Printf("error = %v", err)
-		return
-	}
-	defer db.Close()
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}")
+	//If user wishes to specify the database in url
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}&database={DATABASE}")
 
 	ctx := context.Background()
 
@@ -454,12 +414,9 @@ import (
 )
 
 func main() {
-	db, err := sql.Open("bytehouse", "tcp://?region=<region>&account=<account>&user=<user>&password=<password>")
-	if err != nil {
-		fmt.Printf("error = %v", err)
-		return
-	}
-	defer db.Close()
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}")
+	//If user wishes to specify the database in url
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}&database={DATABASE}")
 
 	// Use your own types here depending on your table
 	type sample struct {
@@ -509,12 +466,9 @@ import (
 )
 
 func main() {
-	db, err := sql.Open("bytehouse", "tcp://?region=<region>&account=<account>&user=<user>&password=<password>")
-	if err != nil {
-		fmt.Printf("error = %v", err)
-		return
-	}
-	defer db.Close()
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}")
+	//If user wishes to specify the database in url
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}&database={DATABASE}")
 
 	// Use your own types here depending on your table value 
 	type sample struct {
@@ -557,12 +511,9 @@ import (
 )
 
 func main() {
-	db, err := sql.Open("bytehouse", "tcp://?region=<region>&account=<account>&user=<user>&password=<password>")
-	if err != nil {
-		fmt.Printf("error = %v", err)
-		return
-	}
-	defer db.Close()
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}")
+	//If user wishes to specify the database in url
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}&database={DATABASE}")
 
 	ctx := context.Background()
 
@@ -618,12 +569,9 @@ import (
 )
 
 func main() {
-	db, err := sql.Open("bytehouse", "tcp://?region=<region>&account=<account>&user=<user>&password=<password>")
-	if err != nil {
-		fmt.Printf("error = %v", err)
-		return
-	}
-	defer db.Close()
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}")
+	//If user wishes to specify the database in url
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}&database={DATABASE}")
 
 	ctx := context.Background()
 
@@ -706,12 +654,9 @@ import (
 )
 
 func main() {
-	db, err := sql.Open("bytehouse", "tcp://?region=<region>&account=<account>&user=<user>&password=<password>")
-	if err != nil {
-		fmt.Printf("error = %v", err)
-		return
-	}
-	defer db.Close()
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}")
+	//If user wishes to specify the database in url
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}&database={DATABASE}")
 
 	ctx := context.Background()
 
@@ -781,12 +726,9 @@ import (
 )
 
 func main() {
-	db, err := sql.Open("bytehouse", "tcp://?region=<region>&account=<account>&user=<user>&password=<password>")
-	if err != nil {
-		fmt.Printf("error = %v", err)
-		return
-	}
-	defer db.Close()
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}")
+	//If user wishes to specify the database in url
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}&database={DATABASE}")
 
 	ctx := context.Background()
 
@@ -858,12 +800,9 @@ import (
 )
 
 func main() {
-	db, err := sql.Open("bytehouse", "tcp://?region=<region>&account=<account>&user=<user>&password=<password>")
-	if err != nil {
-		fmt.Printf("error = %v", err)
-		return
-	}
-	defer db.Close()
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}")
+	//If user wishes to specify the database in url
+    	dsn := fmt.Sprintf("tcp://{HOST}:{PORT}?secure=true&user=bytehouse&password={API_KEY}&database={DATABASE}")
 
 	ctx := context.Background()
 	queryCtx := bytehouse.NewQueryContext(ctx)
